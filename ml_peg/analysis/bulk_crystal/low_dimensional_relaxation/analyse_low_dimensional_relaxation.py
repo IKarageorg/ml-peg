@@ -46,6 +46,13 @@ DEFAULT_THRESHOLDS, DEFAULT_TOOLTIPS, DEFAULT_WEIGHTS = load_metrics_config(
 ENERGY_OUTLIER_MIN = -40
 ENERGY_OUTLIER_MAX = 40
 
+INFO = get_struct_info(
+    calc_path=CALC_PATH,
+    glob_pattern="*/*.xyz",
+    write_info=True,
+    write_structs=False,
+    out_path=OUT_PATH,
+)
 
 # Dimensionality-specific configuration
 DIM_CONFIGS = {
@@ -592,10 +599,4 @@ def test_low_dimensional_relaxation(
     force_violin_1d
         Triggers 1D max-force convergence violin plot generation.
     """
-    get_struct_info(
-        calc_path=CALC_PATH,
-        glob_pattern="*/*.xyz",
-        write_info=True,
-        write_structs=False,
-        out_path=OUT_PATH,
-    )
+    return

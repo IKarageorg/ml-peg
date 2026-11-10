@@ -38,18 +38,13 @@ INFO = get_struct_info(
     calc_path=CALC_PATH,
     glob_pattern="*.xyz",
     info_keys=["complex_charge"],
-    include_filenames=True,
     write_info=True,
-    write_structs=True,
+    write_structs=False,
     out_path=OUT_PATH,
     per_file_info={
         "counts": lambda structs: len(structs[0]),
-        "ref_int_energy": lambda structs: structs[0].info["E_int_ref"],
     },
 )
-
-# Reference values are taken from the mock calculation, which is always complete
-REF_ENERGIES = [energy * EV_TO_KCAL_PER_MOL for energy in INFO["ref_int_energy"]]
 # S30L systems indexed 0-29 in files, 1-30 in original data
 INDICES = list(range(1, len(INFO["complex_charge"]) + 1))
 
@@ -75,17 +70,46 @@ def interaction_energies() -> dict[str, list]:
     dict[str, list]
         Dictionary of reference and predicted interaction energies.
     """
-    results = {"ref": list(REF_ENERGIES)} | {mlip: [] for mlip in MODELS}
+    results = {"ref": []} | {mlip: [] for mlip in MODELS}
+    ref_stored = False
 
     for model_name in MODELS:
-        for label in INFO["filenames"]:
-            xyz_file = CALC_PATH / model_name / f"{label}.xyz"
-            if not xyz_file.exists():
-                results[model_name].append(float("nan"))
-                continue
+        model_dir = CALC_PATH / model_name
 
+        if not model_dir.exists():
+            results[model_name] = []
+            continue
+
+        xyz_files = sorted(model_dir.glob("*.xyz"))
+        if not xyz_files:
+            results[model_name] = []
+            continue
+
+        model_energies = []
+        ref_energies = []
+
+        for xyz_file in xyz_files:
             atoms = read(xyz_file)
-            results[model_name].append(atoms.info["E_int_model"] * EV_TO_KCAL_PER_MOL)
+            model_energies.append(atoms.info["E_int_model"] * EV_TO_KCAL_PER_MOL)
+            if not ref_stored:
+                ref_energies.append(atoms.info["E_int_ref"] * EV_TO_KCAL_PER_MOL)
+
+        results[model_name] = model_energies
+
+        # Store reference energies (only once)
+        if not ref_stored:
+            results["ref"] = ref_energies
+            ref_stored = True
+
+        # Copy individual structure files to app data directory
+        structs_dir = OUT_PATH / model_name
+        structs_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy individual structure files
+        import shutil
+
+        for i, xyz_file in enumerate(xyz_files):
+            shutil.copy(xyz_file, structs_dir / f"{i}.xyz")
 
     return results
 
@@ -107,9 +131,12 @@ def s30l_mae(interaction_energies) -> dict[str, float]:
     """
     results = {}
     for model_name in MODELS:
-        results[model_name] = mae(
-            interaction_energies["ref"], interaction_energies[model_name]
-        )
+        if interaction_energies[model_name]:
+            results[model_name] = mae(
+                interaction_energies["ref"], interaction_energies[model_name]
+            )
+        else:
+            results[model_name] = None
     return results
 
 
@@ -134,9 +161,14 @@ def s30l_charged_mae(interaction_energies) -> dict[str, float]:
 
     results = {}
     for model_name in MODELS:
-        ref_charged = [interaction_energies["ref"][i] for i in charged_indices]
-        pred_charged = [interaction_energies[model_name][i] for i in charged_indices]
-        results[model_name] = mae(ref_charged, pred_charged)
+        if interaction_energies[model_name] and charged_indices:
+            ref_charged = [interaction_energies["ref"][i] for i in charged_indices]
+            pred_charged = [
+                interaction_energies[model_name][i] for i in charged_indices
+            ]
+            results[model_name] = mae(ref_charged, pred_charged)
+        else:
+            results[model_name] = None
     return results
 
 
@@ -161,9 +193,14 @@ def s30l_neutral_mae(interaction_energies) -> dict[str, float]:
 
     results = {}
     for model_name in MODELS:
-        ref_neutral = [interaction_energies["ref"][i] for i in neutral_indices]
-        pred_neutral = [interaction_energies[model_name][i] for i in neutral_indices]
-        results[model_name] = mae(ref_neutral, pred_neutral)
+        if interaction_energies[model_name] and neutral_indices:
+            ref_neutral = [interaction_energies["ref"][i] for i in neutral_indices]
+            pred_neutral = [
+                interaction_energies[model_name][i] for i in neutral_indices
+            ]
+            results[model_name] = mae(ref_neutral, pred_neutral)
+        else:
+            results[model_name] = None
     return results
 
 

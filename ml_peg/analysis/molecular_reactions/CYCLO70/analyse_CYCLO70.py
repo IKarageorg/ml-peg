@@ -48,7 +48,7 @@ INFO = get_struct_info(
     glob_pattern="*_forward.xyz",
     include_filenames=True,
     write_info=True,
-    write_structs=False,
+    write_structs=True,
     out_path=OUT_PATH,
 )
 
@@ -82,18 +82,15 @@ def barrier_heights() -> dict[str, list]:
     ref_stored = False
 
     for model_name in MODELS:
-        model_dir = CALC_PATH / model_name
-        if not model_dir.exists():
-            results[model_name] = [float("nan")] * len(LABELS) * 2
-            continue
+        structs_dir = OUT_PATH / model_name
+        structs_dir.mkdir(parents=True, exist_ok=True)
 
         for label in LABELS:
             for direction in ("forward", "reverse"):
-                struct_path = model_dir / f"{label}_{direction}.xyz"
-                if not struct_path.exists():
-                    results[model_name].append(float("nan"))
-                    continue
-                atoms = read(struct_path, index=":")
+                atoms = read(
+                    CALC_PATH / model_name / f"{label}_{direction}.xyz",
+                    index=":",
+                )
 
                 # Atoms includes reactants/products and TS
                 results[model_name].append(
@@ -105,12 +102,10 @@ def barrier_heights() -> dict[str, list]:
                         atoms[-1].info[f"ref_{direction}_bh"] * EV_TO_KCAL
                     )
 
-        if not ref_stored:
-            if len(results["ref"]) == len(INFO["filenames"]) * 2:
-                ref_stored = True
-            else:
-                results["ref"] = []
+                # Write structures for app
+                write(structs_dir / f"{label}_{direction}.xyz", atoms)
 
+        ref_stored = True
     return results
 
 
@@ -169,10 +164,4 @@ def test_cyclo70_barriers(metrics: dict[str, dict]) -> None:
     metrics
         All new benchmark metric names and dictionary of values for each model.
     """
-    # Write structures from the mock calculation for the app
-    structs_dir = OUT_PATH / "mock"
-    structs_dir.mkdir(parents=True, exist_ok=True)
-    for label in LABELS:
-        for direction in ("forward", "reverse"):
-            atoms = read(CALC_PATH / "mock" / f"{label}_{direction}.xyz", index=":")
-            write(structs_dir / f"{label}_{direction}.xyz", atoms)
+    return

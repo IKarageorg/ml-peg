@@ -7,7 +7,11 @@ from dash.html import Div
 from ml_peg.app import APP_ROOT
 from ml_peg.app.base_app import BaseApp
 from ml_peg.app.utils.build_callbacks import struct_from_table
+from ml_peg.models import current_models
+from ml_peg.models.get_models import get_model_names
 
+# Get all models
+MODELS = get_model_names(current_models)
 BENCHMARK_NAME = "Locality"
 DOCS_URL = (
     "https://ddmms.github.io/ml-peg/user_guide/benchmarks/physicality.html#locality"
@@ -22,7 +26,7 @@ class LocalityApp(BaseApp):
     def register_callbacks(self) -> None:
         """Register callbacks to app."""
         # Assets dir will be parent directory - individual files for each system
-        assets_dir = "/assets/physicality/locality/mock"
+        assets_dir = f"/assets/physicality/locality/{MODELS[0]}"
         structs = {
             "Ghost atoms max ΔF": f"{assets_dir}/system_ghost.xyz",
             "Random hydrogen mean ΔF": f"{assets_dir}/system_random_H.xyz",

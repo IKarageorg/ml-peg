@@ -11,6 +11,11 @@ from ml_peg.app.utils.build_callbacks import (
     struct_from_scatter,
 )
 from ml_peg.app.utils.load import read_plot
+from ml_peg.models import current_models
+from ml_peg.models.get_models import get_model_names
+
+# Get all models
+MODELS = get_model_names(current_models)
 
 BENCHMARK_NAME = "S30L"
 DOCS_URL = (
@@ -31,11 +36,9 @@ class S30LApp(BaseApp):
         )
 
         # Assets dir will be parent directory - individual files for each system
-        # Sorted to match the order systems are plotted in during analysis
-        structs_dir = DATA_PATH / "mock"
         structs = [
-            f"/assets/supramolecular/S30L/mock/{struct_file.name}"
-            for struct_file in sorted(structs_dir.glob("*.xyz"))
+            f"/assets/supramolecular/S30L/{MODELS[0]}/{i}.xyz"
+            for i in range(30)  # S30L has 30 systems
         ]
 
         plot_from_table_column(

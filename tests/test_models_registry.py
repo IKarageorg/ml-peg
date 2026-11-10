@@ -97,7 +97,7 @@ def test_kwargs_are_accepted(name: str):
 
     kwargs = dict(config.get("kwargs") or {})
     # Taken by the loader before the calculator is built.
-    for key in ("name", "model_name", "task_name", "overrides", "inference_settings"):
+    for key in ("name", "model_name", "task_name", "overrides"):
         kwargs.pop(key, None)
 
     check_kwargs(kwargs, target, config["class_name"])

@@ -75,13 +75,17 @@ def check_dataset() -> None:
 
     The calculation copies the downloaded input data into its outputs, so the
     analysis does not need to download it again.
+
+    Raises
+    ------
+    ValueError
+        If any starting structure is missing from the calculation outputs.
     """
     for structure_name in STRUCTURE_NAMES:
         if not structure_xyz(structure_name).exists():
-            pytest.skip(
+            raise ValueError(
                 f"{structure_xyz(structure_name)} does not exist. "
-                "Please run the calculation.",
-                allow_module_level=True,
+                "Please run the calculation."
             )
 
 

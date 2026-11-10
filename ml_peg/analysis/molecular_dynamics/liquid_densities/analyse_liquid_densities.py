@@ -40,15 +40,11 @@ INFO = get_struct_info(
     calc_path=CALC_PATH,
     glob_pattern="*.traj",
     index=0,
-    info_keys=["exp_density"],
     write_info=True,
     write_structs=True,
     out_path=OUT_PATH,
     include_filenames=True,
 )
-
-# Reference values are taken from the mock calculation, which is always complete
-REF_DENSITIES = INFO["exp_density"]
 
 
 def compute_density(fname, density_col=13):
@@ -97,24 +93,24 @@ def liquid_densities() -> dict[str, list]:
     dict[str, list]
         Dictionary of all reference and predicted densities.
     """
-    results = {"ref": list(REF_DENSITIES)} | {mlip: [] for mlip in MODELS}
+    results = {"ref": []} | {mlip: [] for mlip in MODELS}
+    ref_stored = False
 
     for model_name in MODELS:
-        structs_dir = OUT_PATH / model_name
-        structs_dir.mkdir(parents=True, exist_ok=True)
-
         for label in INFO["filenames"]:
-            traj_path = CALC_PATH / model_name / f"{label}.traj"
-            log_path = CALC_PATH / model_name / f"{label}.log"
-            if not traj_path.exists() or not log_path.exists():
-                results[model_name].append(float("nan"))
-                continue
+            atoms = Trajectory(CALC_PATH / model_name / f"{label}.traj")[-1]
 
-            results[model_name].append(compute_density(log_path))
+            results[model_name].append(
+                compute_density(CALC_PATH / model_name / f"{label}.log")
+            )
+            if not ref_stored:
+                results["ref"].append(atoms.info["exp_density"])
 
             # Write structures for app
-            write(structs_dir / f"{label}.xyz", Trajectory(traj_path)[-1])
-
+            structs_dir = OUT_PATH / model_name
+            structs_dir.mkdir(parents=True, exist_ok=True)
+            write(structs_dir / f"{label}.xyz", atoms)
+        ref_stored = True
     return results
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 
 from ase.io import read
 import pytest
@@ -100,6 +101,10 @@ def relative_energies() -> dict[str, list[float]]:
 
             if not ref_stored:
                 results["ref"].append(atoms.info["relative_energy_ref_kcal"])
+
+            dest_dir = OUT_PATH / model_name
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy(xyz_file, dest_dir / xyz_file.name)
 
         results[model_name] = model_predictions
 

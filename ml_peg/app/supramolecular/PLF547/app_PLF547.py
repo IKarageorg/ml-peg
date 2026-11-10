@@ -11,7 +11,11 @@ from ml_peg.app.utils.build_callbacks import (
     struct_from_scatter,
 )
 from ml_peg.app.utils.load import read_plot
+from ml_peg.models import current_models
+from ml_peg.models.get_models import get_model_names
 
+# Get all models
+MODELS = get_model_names(current_models)
 BENCHMARK_NAME = "PLF547"
 DOCS_URL = (
     "https://ddmms.github.io/ml-peg/user_guide/benchmarks/supramolecular.html#plf547"
@@ -51,7 +55,7 @@ class PLF547App(BaseApp):
         )
 
         # Structures are stored for each model under the benchmark data folder.
-        structs = _structure_paths("mock")
+        structs = _structure_paths(MODELS[0])
 
         plot_from_table_column(
             table_id=self.table_id,

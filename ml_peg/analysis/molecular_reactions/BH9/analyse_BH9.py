@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ase import units
-from ase.io import read
+from ase.io import read, write
 import pytest
 
 from ml_peg.analysis.utils.decorators import build_table, plot_parity
@@ -113,36 +113,36 @@ def barrier_heights() -> dict[str, list]:
 
     system_names = SYSTEM_INFO["filenames"]
     for model_name in MODELS:
+        model_barriers = []
+        ref_barriers = []
         model_dir = CALC_PATH / model_name
         if not model_dir.exists():
-            results[model_name] = [float("nan")] * len(system_names)
+            results[model_name] = []
             continue
-
         for system_name in system_names:
             model_forward_barrier = 0
             ref_forward_barrier = 0
 
-            struct_path = model_dir / f"{system_name}.xyz"
-            if not struct_path.exists():
-                results[model_name].append(float("nan"))
-                continue
+            # Write structures for app
+            structs_dir = OUT_PATH / model_name
+            structs_dir.mkdir(parents=True, exist_ok=True)
 
-            atoms = read(struct_path, index=":")
+            atoms = read(model_dir / f"{system_name}.xyz", index=":")
             model_forward_barrier += atoms[0].info["model_energy"]
             for struct in atoms[1:]:
                 model_forward_barrier -= struct.info["model_energy"]
 
             ref_forward_barrier = atoms[0].info["ref_forward_barrier"]
 
-            results[model_name].append(model_forward_barrier * EV_TO_KCAL)
-            if not ref_stored:
-                results["ref"].append(ref_forward_barrier * EV_TO_KCAL)
+            write(structs_dir / f"{system_name}.xyz", atoms)
 
+            model_barriers.append(model_forward_barrier * EV_TO_KCAL)
+            ref_barriers.append(ref_forward_barrier * EV_TO_KCAL)
+
+        results[model_name] = model_barriers
         if not ref_stored:
-            if len(results["ref"]) == len(SYSTEM_INFO["filenames"]):
-                ref_stored = True
-            else:
-                results["ref"] = []
+            results["ref"] = ref_barriers
+            ref_stored = True
     return results
 
 

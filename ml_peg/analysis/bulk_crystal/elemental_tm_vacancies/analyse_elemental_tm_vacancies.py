@@ -28,15 +28,11 @@ INFO = get_struct_info(
     calc_path=CALC_PATH,
     glob_pattern="*.xyz",
     index="0",
-    info_keys=["system", "ref"],
-    include_filenames=True,
+    info_keys=["system"],
     write_info=True,
-    write_structs=False,
+    write_structs=True,
     out_path=OUT_PATH,
 )
-
-# Reference values are taken from the mock calculation, which is always complete
-REF_ENERGIES = INFO["ref"]
 
 
 @pytest.fixture
@@ -58,24 +54,42 @@ def vacancy_formation_energies() -> dict[str, list]:
     dict[str, list]
         Dictionary of reference and predicted vacancy formation energies.
     """
-    results = {"ref": list(REF_ENERGIES)} | {mlip: [] for mlip in MODELS}
+    results = {"ref": []} | {mlip: [] for mlip in MODELS}
+    ref_stored = False
 
     for model_name in MODELS:
-        for label in INFO["filenames"]:
-            xyz_file = CALC_PATH / model_name / f"{label}.xyz"
-            if not xyz_file.exists():
-                results[model_name].append(float("nan"))
-                continue
+        model_dir = CALC_PATH / model_name
 
+        if not model_dir.exists():
+            continue
+
+        xyz_files = sorted(model_dir.glob("*.xyz"))
+        if not xyz_files:
+            continue
+
+        for xyz_file in xyz_files:
             structs = read(xyz_file, index=":")
 
             bulk_energy = structs[0].get_potential_energy()
             num_atoms = len(structs[0])
+            system = structs[0].info["system"]
             vacancy_energy = structs[1].get_potential_energy()
 
-            results[model_name].append(
+            vacancy_formation_energy = (
                 vacancy_energy - ((num_atoms - 1) / num_atoms) * bulk_energy
             )
+            results[model_name].append(vacancy_formation_energy)
+
+            # Copy individual structure files to app data directory
+            structs_dir = OUT_PATH / model_name
+            structs_dir.mkdir(parents=True, exist_ok=True)
+            write(structs_dir / f"{system}.xyz", structs)
+
+            # Store reference energies (only once)
+            if not ref_stored:
+                results["ref"].append(structs[0].info["ref"])
+
+        ref_stored = True
 
     return results
 
@@ -141,9 +155,4 @@ def test_vacancy_formation_energies(metrics: dict[str, dict]) -> None:
     metrics
         All elemental TM vacancy formation energies metrics.
     """
-    # Write bulk and vacancy structures from the mock calculation for the app
-    structs_dir = OUT_PATH / "mock"
-    structs_dir.mkdir(parents=True, exist_ok=True)
-    for label in INFO["filenames"]:
-        structs = read(CALC_PATH / "mock" / f"{label}.xyz", index=":")
-        write(structs_dir / f"{label}.xyz", structs)
+    return

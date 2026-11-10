@@ -28,17 +28,77 @@ INFO = get_struct_info(
     glob_pattern="*.xyz",
     info_keys=["system", "complex_charge"],
     include_filenames=True,
-    per_file_info={
-        "complex_atoms": lambda structs: len(structs[0]),
-        "ref_int_energy": lambda structs: structs[0].info["E_int_ref_kcal"],
-    },
     write_info=True,
     write_structs=True,
     out_path=OUT_PATH,
 )
 
-# Reference values are taken from the mock calculation, which is always complete
-REF_ENERGIES = INFO["ref_int_energy"]
+
+def get_atom_counts() -> list[int]:
+    """
+    Get complex atom counts for LNCI16.
+
+    Returns
+    -------
+    list[int]
+        List of complex atom counts from structure files.
+    """
+    for model_name in MODELS:
+        model_dir = CALC_PATH / model_name
+        if model_dir.exists():
+            xyz_files = sorted(model_dir.glob("*.xyz"))
+            if xyz_files:
+                atom_counts = []
+                for xyz_file in xyz_files:
+                    atoms = read(xyz_file)
+                    atom_counts.append(len(atoms))
+                return atom_counts
+    return []
+
+
+def get_charges() -> list[int]:
+    """
+    Get complex charges for LNCI16.
+
+    Returns
+    -------
+    list[int]
+        List of complex charges from structure files.
+    """
+    for model_name in MODELS:
+        model_dir = CALC_PATH / model_name
+        if model_dir.exists():
+            xyz_files = sorted(model_dir.glob("*.xyz"))
+            if xyz_files:
+                charges = []
+                for xyz_file in xyz_files:
+                    atoms = read(xyz_file)
+                    charges.append(atoms.info.get("complex_charge", 0))
+                return charges
+    return []
+
+
+def get_is_charged() -> list[bool]:
+    """
+    Get whether systems are charged for LNCI16.
+
+    Returns
+    -------
+    list[bool]
+        List of boolean values indicating if systems are charged.
+    """
+    for model_name in MODELS:
+        model_dir = CALC_PATH / model_name
+        if model_dir.exists():
+            xyz_files = sorted(model_dir.glob("*.xyz"))
+            if xyz_files:
+                is_charged = []
+                for xyz_file in xyz_files:
+                    atoms = read(xyz_file)
+                    charge = atoms.info.get("complex_charge", 0)
+                    is_charged.append(charge != 0)
+                return is_charged
+    return []
 
 
 @pytest.fixture
@@ -49,9 +109,9 @@ REF_ENERGIES = INFO["ref_int_energy"]
     y_label="Reference interaction energy / kcal/mol",
     hoverdata={
         "System": INFO["system"],
-        "Complex Atoms": INFO["complex_atoms"],
+        "Complex Atoms": get_atom_counts(),
         "Charge": INFO["complex_charge"],
-        "Charged": [charge != 0 for charge in INFO["complex_charge"]],
+        "Charged": get_is_charged(),
     },
 )
 def interaction_energies() -> dict[str, list]:
@@ -63,17 +123,46 @@ def interaction_energies() -> dict[str, list]:
     dict[str, list]
         Dictionary of reference and predicted interaction energies.
     """
-    results = {"ref": list(REF_ENERGIES)} | {mlip: [] for mlip in MODELS}
+    results = {"ref": []} | {mlip: [] for mlip in MODELS}
+    ref_stored = False
 
     for model_name in MODELS:
-        for label in INFO["filenames"]:
-            xyz_file = CALC_PATH / model_name / f"{label}.xyz"
-            if not xyz_file.exists():
-                results[model_name].append(float("nan"))
-                continue
+        model_dir = CALC_PATH / model_name
 
+        if not model_dir.exists():
+            results[model_name] = []
+            continue
+
+        xyz_files = sorted(model_dir.glob("*.xyz"))
+        if not xyz_files:
+            results[model_name] = []
+            continue
+
+        model_energies = []
+        ref_energies = []
+
+        for xyz_file in xyz_files:
             atoms = read(xyz_file)
-            results[model_name].append(atoms.info["E_int_model_kcal"])
+            model_energies.append(atoms.info["E_int_model_kcal"])
+            if not ref_stored:
+                ref_energies.append(atoms.info["E_int_ref_kcal"])
+
+        results[model_name] = model_energies
+
+        # Store reference energies (only once)
+        if not ref_stored:
+            results["ref"] = ref_energies
+            ref_stored = True
+
+        # Copy individual structure files to app data directory
+        structs_dir = OUT_PATH / model_name
+        structs_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy individual structure files
+        import shutil
+
+        for i, xyz_file in enumerate(xyz_files):
+            shutil.copy(xyz_file, structs_dir / f"{i}.xyz")
 
     return results
 
@@ -95,9 +184,12 @@ def lnci16_mae(interaction_energies) -> dict[str, float]:
     """
     results = {}
     for model_name in MODELS:
-        results[model_name] = mae(
-            interaction_energies["ref"], interaction_energies[model_name]
-        )
+        if interaction_energies[model_name]:
+            results[model_name] = mae(
+                interaction_energies["ref"], interaction_energies[model_name]
+            )
+        else:
+            results[model_name] = None
     return results
 
 
